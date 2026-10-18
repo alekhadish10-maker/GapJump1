@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gap Jump - Arcade Platformer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap');
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #0B0F19;
+            overflow: hidden;
+        }
+
+        /* Glassmorphism Styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .glass-button {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .glass-button:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        @keyframes pulse-subtle {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.85; }
+        }
+
+        .animate-pulse-subtle {
+            animation: pulse-subtle 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex items-center justify-center text-white relative">
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas" class="absolute inset-0 w-full h-full block z-0"></canvas>
+
+    <!-- Main Menu Overlay -->
+    <div id="mainMenu" class="absolute inset-0 flex items-center justify-center z-10 p-4">
+        <div class="glass-panel rounded-3xl p-8 max-w-md w-full text-center flex flex-col items-center gap-6 animate-pulse-subtle">
+            <div class="space-y-1">
+                <span class="text-xs font-bold tracking-widest text-cyan-400 uppercase">Endless Runner</span>
+                <h1 class="text-5xl font-black italic tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400">GAP JUMP</h1>
+                <p class="text-xs text-slate-400">Precision timing, high-speed jumps!</p>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="grid grid-cols-2 gap-3 w-full bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+                <div class="flex flex-col items-center">
+                    <span class="text-xs text-slate-400">BEST DISTANCE</span>
+                    <span id="menuHighScore" class="text-2xl font-extrabold text-amber-400">0m</span>
+                </div>
+                <div class="flex flex-col items-center">
+                    <span class="text-xs text-slate-400">TOTAL COINS</span>
+                    <span id="menuTotalCoins" class="text-2xl font-extrabold text-yellow-400">0</span>
+                </div>
+            </div>
+
+            <!-- Main Actions -->
+            <div class="flex flex-col gap-3 w-full">
+                <button id="startBtn" class="glass-button w-full py-4 rounded-2xl font-extrabold text-lg text-white bg-gradient-to-r from-cyan-500 to-blue-600 border-cyan-400/50 shadow-lg shadow-cyan-500/20">
+                    PLAY NOW
+                </button>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="shopBtn" class="glass-button py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2">
+                        🛍️ Shop
+                    </button>
+                    <button id="achievementsBtn" class="glass-button py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2">
+                        🏆 Badges
+                    </button>
+                </div>
+            </div>
+
+            <div class="text-xs text-slate-400">
+                Press <span class="px-2 py-1 bg-slate-800 rounded border border-white/10 text-white font-mono">SPACE</span> or <span class="px-2 py-1 bg-slate-800 rounded border border-white/10 text-white font-mono">TAP</span> to jump!
+            </div>
+        </div>
+    </div>
+
+    <!-- HUD Overlay (In-Game) -->
+    <div id="hud" class="absolute inset-x-0 top-0 p-4 md:p-6 flex justify-between items-start pointer-events-none z-10 hidden">
+        <div class="flex flex-col gap-2">
+            <div class="glass-panel px-4 py-2 rounded-2xl flex items-center gap-3">
+                <span class="text-xs font-bold text-slate-400 uppercase">Distance</span>
+                <span id="hudDistance" class="text-2xl font-black text-cyan-400 font-mono">0m</span>
+            </div>
+            <div class="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2 w-max">
+                <span class="text-yellow-400 text-sm">🪙</span>
+                <span id="hudCoins" class="text-lg font-extrabold text-amber-300 font-mono">0</span>
+            </div>
+        </div>
+
+        <!-- Powerup Indicators & Pause -->
+        <div class="flex items-center gap-3 pointer-events-auto">
+            <div id="powerupIcons" class="flex gap-2"></div>
+            <button id="audioToggleBtn" class="glass-button w-11 h-11 rounded-2xl flex items-center justify-center text-lg">
+                🔊
+            </button>
+            <button id="pauseBtn" class="glass-button w-11 h-11 rounded-2xl flex items-center justify-center text-lg">
+                ⏸️
+            </button>
+        </div>
+    </div>
+
+    <!-- Pause Modal -->
+    <div id="pauseModal" class="absolute inset-0 bg-black/60 backdrop-blur-md z-20 flex items-center justify-center hidden">
+        <div class="glass-panel rounded-3xl p-8 max-w-xs w-full text-center flex flex-col gap-4">
+            <h2 class="text-3xl font-black text-white tracking-wide">PAUSED</h2>
+            <div class="flex flex-col gap-3 mt-2">
+                <button id="resumeBtn" class="glass-button py-3 rounded-2xl font-bold text-cyan-400">Resume</button>
+                <button id="restartBtn" class="glass-button py-3 rounded-2xl font-bold text-white">Restart</button>
+                <button id="quitBtn" class="glass-button py-3 rounded-2xl font-bold text-rose-400">Quit to Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shop Modal -->
+    <div id="shopModal" class="absolute inset-0 bg-black/70 backdrop-blur-md z-20 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-3xl p-6 max-w-lg w-full flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-black text-white flex items-center gap-2">🛍️ Ball Skins</h2>
+                <div class="flex items-center gap-1.5 bg-yellow-400/10 px-3 py-1 rounded-full border border-yellow-400/30">
+                    <span>🪙</span>
+                    <span id="shopCoins" class="font-bold text-yellow-400">0</span>
+                </div>
+            </div>
+            <div id="shopList" class="grid grid-cols-2 gap-3 overflow-y-auto pr-1"></div>
+            <button id="closeShopBtn" class="glass-button mt-4 py-3 rounded-2xl font-bold text-slate-300">Close</button>
+        </div>
+    </div>
+
+    <!-- Achievements Modal -->
+    <div id="achievementsModal" class="absolute inset-0 bg-black/70 backdrop-blur-md z-20 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-3xl p-6 max-w-md w-full flex flex-col max-h-[85vh]">
+            <h2 class="text-2xl font-black text-white mb-4 flex items-center gap-2">🏆 Achievements</h2>
+            <div id="achievementsList" class="flex flex-col gap-3 overflow-y-auto pr-1"></div>
+            <button id="closeAchievementsBtn" class="glass-button mt-4 py-3 rounded-2xl font-bold text-slate-300">Close</button>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameOverModal" class="absolute inset-0 bg-black/80 backdrop-blur-lg z-20 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-3xl p-8 max-w-sm w-full text-center flex flex-col items-center gap-5">
+            <div class="space-y-1">
+                <span class="text-xs font-bold tracking-widest text-rose-400 uppercase">Run Ended</span>
+                <h2 class="text-4xl font-black text-white">GAME OVER</h2>
+            </div>
+
+            <div id="newHighBanner" class="hidden bg-gradient-to-r from-amber-500 to-yellow-300 text-slate-950 font-black text-xs px-4 py-1 rounded-full tracking-wider animate-bounce">
+                🎉 NEW HIGH SCORE! 🎉
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 w-full bg-slate-900/80 p-4 rounded-2xl border border-white/5 text-left">
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase">Distance</div>
+                    <div id="finalDistance" class="text-xl font-black text-cyan-400">0m</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase">Coins Collected</div>
+                    <div id="finalCoins" class="text-xl font-black text-yellow-400">0</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase">Max Combo</div>
+                    <div id="finalCombo" class="text-xl font-black text-fuchsia-400">0x</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase">Best Record</div>
+                    <div id="finalBest" class="text-xl font-black text-amber-400">0m</div>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3 w-full">
+                <button id="retryBtn" class="glass-button w-full py-3.5 rounded-2xl font-extrabold text-lg text-white bg-gradient-to-r from-cyan-500 to-blue-600 border-cyan-400/50">
+                    TRY AGAIN
+                </button>
+                <button id="menuFromGameOverBtn" class="glass-button py-2.5 rounded-2xl font-bold text-sm text-slate-300">
+                    Main Menu
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Implementation -->
+    <script>
+        /**
+         * GAP JUMP - Canvas HTML5 Single File Game
+         */
+
+        // --- GAME STATE & CONSTANTS ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let STATE = 'MENU'; // MENU, PLAYING, PAUSED, GAMEOVER
+        let audioMuted = false;
+        let bgmEnabled = true;
+
+        // Player & Save Data
+        let saveData = {
+            highScore: 0,
+            coins: 0,
+            equippedSkin: 'classic',
+            unlockedSkins: ['classic'],
+            unlockedAchievements: []
+        };
+
+        function loadSaveData() {
+            try {
+                const loaded = localStorage.getItem('gap_jump_save');
+                if (loaded) {
+                    saveData = { ...saveData, ...JSON.parse(loaded) };
+                }
+            } catch (e) {
+                console.error("Failed to load save data", e);
+            }
+        }
+
+        function saveGame() {
+            try {
+                localStorage.setItem('gap_jump_save', JSON.stringify(saveData));
+            } catch (e) {
+                console.error("Failed to save data", e);
+            }
+        }
+
+        // --- SKINS & ACHIEVEMENTS DEFINITION ---
+        const SKINS = {
+            classic: { name: 'Classic Blue', cost: 0, color: '#38bdf8', glow: '#0284c7', trail: 'cyan' },
+            fireball: { name: 'Fireball', cost: 100, color: '#f97316', glow: '#ef4444', trail: 'fire' },
+            neon: { name: 'Neon Blade', cost: 200, color: '#22c55e', glow: '#10b981', trail: 'neon' },
+            electric: { name: 'Pulse Electric', cost: 350, color: '#a855f7', glow: '#6366f1', trail: 'electric' },
+            golden: { name: 'Golden Sun', cost: 500, color: '#eab308', glow: '#f59e0b', trail: 'gold' },
+            rainbow: { name: 'Rainbow Burst', cost: 750, color: '#ec4899', glow: '#8b5cf6', trail: 'rainbow' },
+            cyber: { name: 'Cyber Grid', cost: 1000, color: '#06b6d4', glow: '#3b82f6', trail: 'cyber' },
+            blackhole: { name: 'Cosmic Hole', cost: 1500, color: '#1e1b4b', glow: '#a855f7', trail: 'cosmic' }
+        };
+
+        const ACHIEVEMENTS = [
+            { id: 'first_run', title: 'First Flight', desc: 'Complete your first run', icon: '🚀' },
+            { id: 'jump_500', title: 'Gap Master', desc: 'Reach 500m in a single run', icon: '🏃' },
+            { id: 'jump_1500', title: 'Distance Legend', desc: 'Reach 1,500m in a single run', icon: '👑' },
+            { id: 'coin_50', title: 'Coin Collector', desc: 'Collect 50 coins total', icon: '🪙' },
+            { id: 'powerup_frenzy', title: 'Power-Up Frenzy', desc: 'Pick up 5 power-ups in one run', icon: '⚡' },
+            { id: 'skin_collector', title: 'Fashionista', desc: 'Unlock 3 unique skins', icon: '🎨' }
+        ];
+
+        // --- SOUND SYNTHESIZER (Web Audio API) ---
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSound(type) {
+            if (audioMuted || !audioCtx) return;
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'jump') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(580, now + 0.15);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            } else if (type === 'doubleJump') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.18);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.18);
+            } else if (type === 'coin') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(987.77, now); // B5
+                osc.frequency.setValueAtTime(1318.51, now + 0.08); // E6
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'spring') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.linearRampToValueAtTime(600, now + 0.25);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'powerup') {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.05 + 0.15);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.05);
+                    osc.stop(now + idx * 0.05 + 0.15);
+                });
+            } else if (type === 'shieldHit') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(80, now + 0.3);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'crash') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(120, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+                gain.gain.setValueAtTime(0.5, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        }
+
+        // Procedural Synthwave BGM Loop
+        let bgmTimer = 0;
+        const bgmNotes = [110, 110, 130.81, 110, 146.83, 110, 130.81, 98.00];
+        let bgmStep = 0;
+
+        function updateBGM(dt) {
+            if (audioMuted || !bgmEnabled || !audioCtx || STATE !== 'PLAYING') return;
+            bgmTimer += dt;
+            if (bgmTimer >= 0.22) {
+                bgmTimer = 0;
+                const freq = bgmNotes[bgmStep % bgmNotes.length];
+                bgmStep++;
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.18);
+            }
+        }
+
+        // --- GAME ENGINE VARIABLES ---
+        let viewportWidth = 0;
+        let viewportHeight = 0;
+
+        const GRAVITY = 1800;
+        const JUMP_FORCE = -680;
+        const BASE_SPEED = 320;
+        const MAX_SPEED = 700;
+
+        let gameSpeed = BASE_SPEED;
+        let distance = 0; // In meters
+        let runCoins = 0;
+        let comboStreak = 0;
+        let maxCombo = 0;
+        let powerupsCollectedInRun = 0;
+
+        // Player Object
+        const player = {
+            x: 100,
+            y: 0,
+            radius: 18,
+            vx: 0,
+            vy: 0,
+            isGrounded: false,
+            canDoubleJump: false,
+            hasDoubleJumpPowerup: false,
+            shieldActive: false,
+            magnetActive: 0, // timer in seconds
+            coyoteTimer: 0,
+            jumpBufferTimer: 0,
+            rotation: 0
+        };
+
+        // Camera Dynamics
+        const camera = {
+            x: 0,
+            y: 0,
+            zoom: 1,
+            shake: 0
+        };
+
+        // Entities & Collections
+        let platforms = [];
+        let coins = [];
+        let obstacles = [];
+        let powerups = [];
+        let particles = [];
+        let floatingTexts = [];
+
+        // Parallax Stars & Clouds
+        let bgClouds = [];
+        let bgMountains = [];
+
+        // Environmental Biomes
+        const BIOMES = [
+            { name: 'Sunset Cyberpunk', skyTop: '#0f172a', skyBottom: '#581c87', platformTop: '#ec4899', platformSide: '#831843' },
+            { name: 'Neon Night', skyTop: '#020617', skyBottom: '#0f172a', platformTop: '#06b6d4', platformSide: '#164e63' },
+            { name: 'Emerald Synth', skyTop: '#022c22', skyBottom: '#064e3b', platformTop: '#10b981', platformSide: '#065f46' },
+            { name: 'Gold Golden Hour', skyTop: '#451a03', skyBottom: '#78350f', platformTop: '#f59e0b', platformSide: '#92400e' }
+        ];
+
+        function getCurrentBiome() {
+            const index = Math.floor(distance / 500) % BIOMES.length;
+            return BIOMES[index];
+        }
+
+        // --- RESIZE & INITIALIZATION ---
+        function resizeCanvas() {
+            viewportWidth = window.innerWidth;
+            viewportHeight = window.innerHeight;
+            canvas.width = viewportWidth;
+            canvas.height = viewportHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function initBackgroundElements() {
+            bgClouds = [];
+            for (let i = 0; i < 12; i++) {
+                bgClouds.push({
+                    x: Math.random() * viewportWidth * 2,
+                    y: Math.random() * (viewportHeight * 0.4),
+                    scale: 0.5 + Math.random() * 0.8,
+                    speed: 0.2 + Math.random() * 0.3
+                });
+            }
+
+            bgMountains = [];
+            for (let i = 0; i < 20; i++) {
+                bgMountains.push({
+                    x: i * 150,
+                    height: 80 + Math.random() * 120,
+                    width: 180 + Math.random() * 80
+                });
+            }
+        }
+
+        // --- LEVEL GENERATION ---
+        let lastPlatformEndX = 0;
+        let lastPlatformY = 0;
+
+        function resetGame() {
+            gameSpeed = BASE_SPEED;
+            distance = 0;
+            runCoins = 0;
+            comboStreak = 0;
+            maxCombo = 0;
+            powerupsCollectedInRun = 0;
+
+            player.x = 150;
+            player.y = viewportHeight / 2;
+            player.vx = 0;
+            player.vy = 0;
+            player.isGrounded = false;
+            player.canDoubleJump = true;
+            player.hasDoubleJumpPowerup = false;
+            player.shieldActive = false;
+            player.magnetActive = 0;
+            player.coyoteTimer = 0;
+            player.jumpBufferTimer = 0;
+
+            camera.x = 0;
+            camera.y = 0;
+            camera.shake = 0;
+
+            platforms = [];
+            coins = [];
+            obstacles = [];
+            powerups = [];
+            particles = [];
+            floatingTexts = [];
+
+            // Spawn Initial Safe Ground Platform
+            const startPlat = {
+                x: 50,
+                y: viewportHeight * 0.65,
+                width: 700,
+                height: 400,
+                type: 'normal'
+            };
+            platforms.push(startPlat);
+            lastPlatformEndX = startPlat.x + startPlat.width;
+            lastPlatformY = startPlat.y;
+
+            // Generate initial batch of platforms
+            while (lastPlatformEndX < viewportWidth + 1200) {
+                spawnNextPlatform();
+            }
+        }
+
+        function spawnNextPlatform() {
+            // Gap width increases slightly as game speed grows, guaranteed jumpable physically
+            const maxJumpDist = (gameSpeed * 0.72); 
+            const minGap = 120;
+            const gap = minGap + Math.random() * Math.min(220, maxJumpDist - 100);
+
+            const minWidth = 250;
+            const maxWidth = 550;
+            const width = minWidth + Math.random() * (maxWidth - minWidth);
+
+            // Vertical variation
+            const maxDeltaY = 110;
+            let y = lastPlatformY + (Math.random() * maxDeltaY * 2 - maxDeltaY);
+            // Keep platform within reasonable height bounds
+            y = Math.max(viewportHeight * 0.4, Math.min(viewportHeight * 0.78, y));
+
+            const platformX = lastPlatformEndX + gap;
+
+            const newPlat = {
+                x: platformX,
+                y: y,
+                width: width,
+                height: 400,
+                hasSpring: Math.random() < 0.15
+            };
+            platforms.push(newPlat);
+
+            // Spawn Items & Obstacles on Platform
+            if (!newPlat.hasSpring && Math.random() < 0.35) {
+                // Spawn low hurdle obstacle or laser
+                obstacles.push({
+                    x: platformX + width * 0.4 + Math.random() * (width * 0.3),
+                    y: y - 30,
+                    width: 22,
+                    height: 30,
+                    type: Math.random() < 0.25 ? 'laser' : 'hurdle'
+                });
+            }
+
+            // Spawn Spring / Boost Pad
+            if (newPlat.hasSpring) {
+                obstacles.push({
+                    x: platformX + width * 0.5,
+                    y: y - 10,
+                    width: 36,
+                    height: 10,
+                    type: 'spring'
+                });
+            }
+
+            // Spawn Coins Pattern
+            if (Math.random() < 0.7) {
+                const coinCount = 3 + Math.floor(Math.random() * 4);
+                const startCoinX = platformX + 60;
+                const coinSpacing = 32;
+                for (let i = 0; i < coinCount; i++) {
+                    coins.push({
+                        x: startCoinX + i * coinSpacing,
+                        y: y - 35 - Math.sin((i / coinCount) * Math.PI) * 40,
+                        collected: false
+                    });
+                }
+            }
+
+            // Spawn Power-up (Shield, Magnet, Double Jump)
+            if (Math.random() < 0.12) {
+                const pTypes = ['shield', 'magnet', 'doubleJump'];
+                powerups.push({
+                    x: platformX + width * 0.5,
+                    y: y - 65,
+                    type: pTypes[Math.floor(Math.random() * pTypes.length)],
+                    collected: false
+                });
+            }
+
+            lastPlatformEndX = platformX + width;
+            lastPlatformY = y;
+        }
+
+        // --- INPUT HANDLING ---
+        function triggerJump() {
+            if (STATE !== 'PLAYING') return;
+
+            player.jumpBufferTimer = 0.12; // Buffer jump for 120ms
+        }
+
+        function executeJump() {
+            if (player.isGrounded || player.coyoteTimer > 0) {
+                player.vy = JUMP_FORCE;
+                player.isGrounded = false;
+                player.coyoteTimer = 0;
+                player.jumpBufferTimer = 0;
+                playSound('jump');
+                createLandingParticles(player.x, player.y + player.radius, '#38bdf8');
+            } else if (player.hasDoubleJumpPowerup || player.canDoubleJump) {
+                player.vy = JUMP_FORCE * 0.92;
+                if (player.hasDoubleJumpPowerup) {
+                    player.hasDoubleJumpPowerup = false;
+                } else {
+                    player.canDoubleJump = false;
+                }
+                player.jumpBufferTimer = 0;
+                playSound('doubleJump');
+                createLandingParticles(player.x, player.y + player.radius, '#a855f7');
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                initAudio();
+                if (STATE === 'PLAYING') triggerJump();
+            }
+            if (e.code === 'KeyP' || e.code === 'Escape') {
+                if (STATE === 'PLAYING') pauseGame();
+                else if (STATE === 'PAUSED') resumeGame();
+            }
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            // Prevent double firing on UI buttons
+            if (e.target.tagName === 'BUTTON') return;
+            initAudio();
+            if (STATE === 'PLAYING') triggerJump();
+        }, { passive: true });
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'BUTTON') return;
+            initAudio();
+            if (STATE === 'PLAYING') triggerJump();
+        });
+
+        // --- PARTICLES & FLOATING TEXT ---
+        function createLandingParticles(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 200,
+                    vy: (Math.random() - 0.8) * 120,
+                    radius: 2 + Math.random() * 3,
+                    color: color,
+                    alpha: 1,
+                    life: 0.3 + Math.random() * 0.2
+                });
+            }
+        }
+
+        function addFloatingText(text, x, y, color = '#facc15') {
+            floatingTexts.push({
+                text, x, y, color, alpha: 1, vy: -60, life: 0.8
+            });
+        }
+
+        function createBallTrail() {
+            const skin = SKINS[saveData.equippedSkin] || SKINS.classic;
+            particles.push({
+                x: player.x - 5,
+                y: player.y + (Math.random() - 0.5) * 8,
+                vx: -gameSpeed * 0.2,
+                vy: (Math.random() - 0.5) * 30,
+                radius: player.radius * (0.3 + Math.random() * 0.4),
+                color: skin.color,
+                alpha: 0.7,
+                life: 0.25
+            });
+        }
+
+        // --- UPDATE LOOP ---
+        let lastTime = performance.now();
+
+        function update(dt) {
+            if (STATE !== 'PLAYING') return;
+
+            // Increase speed over time/distance
+            gameSpeed = Math.min(MAX_SPEED, BASE_SPEED + (distance * 0.15));
+            distance += (gameSpeed * dt) / 10;
+
+            // BGM Step
+            updateBGM(dt);
+
+            // Timers
+            if (player.magnetActive > 0) player.magnetActive -= dt;
+            if (player.coyoteTimer > 0) player.coyoteTimer -= dt;
+
+            if (player.jumpBufferTimer > 0) {
+                player.jumpBufferTimer -= dt;
+                executeJump();
+            }
+
+            // Gravity & Movement
+            player.vy += GRAVITY * dt;
+            player.y += player.vy * dt;
+            player.rotation += (gameSpeed * dt) * 0.05;
+
+            // Ball Trail
+            createBallTrail();
+
+            // Camera follow player position smoothly
+            camera.x = player.x - 180;
+            if (camera.shake > 0) camera.shake -= dt * 30;
+
+            // Platform Collision Detection
+            let grounded = false;
+            const playerBottom = player.y + player.radius;
+            const playerRight = player.x + player.radius;
+            const playerLeft = player.x - player.radius;
+
+            platforms.forEach(plat => {
+                // Check if ball is above platform x-range
+                if (playerRight > plat.x && playerLeft < plat.x + plat.width) {
+                    const platTop = plat.y;
+                    // Landing on top of platform
+                    if (playerBottom >= platTop && (playerBottom - player.vy * dt) <= platTop + 12 && player.vy >= 0) {
+                        player.y = platTop - player.radius;
+                        player.vy = 0;
+                        grounded = true;
+                        if (!player.isGrounded) {
+                            // Just landed
+                            createLandingParticles(player.x, platTop, '#cbd5e1');
+                        }
+                    }
+                }
+            });
+
+            if (grounded) {
+                player.isGrounded = true;
+                player.canDoubleJump = true;
+                player.coyoteTimer = 0.12; // 120ms coyote time window
+            } else {
+                if (player.isGrounded) {
+                    player.isGrounded = false;
+                }
+            }
+
+            // Coin Interactions & Magnet
+            coins.forEach(coin => {
+                if (coin.collected) return;
+
+                // Magnet logic
+                if (player.magnetActive > 0) {
+                    const dx = player.x - coin.x;
+                    const dy = player.y - coin.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 220) {
+                        coin.x += (dx / dist) * 450 * dt;
+                        coin.y += (dy / dist) * 450 * dt;
+                    }
+                }
+
+                // Pickup check
+                const dx = player.x - coin.x;
+                const dy = player.y - coin.y;
+                if (Math.hypot(dx, dy) < player.radius + 12) {
+                    coin.collected = true;
+                    runCoins++;
+                    comboStreak++;
+                    if (comboStreak > maxCombo) maxCombo = comboStreak;
+
+                    playSound('coin');
+                    const bonus = comboStreak > 5 ? 2 : 1;
+                    addFloatingText(`+${10 * bonus}`, coin.x, coin.y, '#facc15');
+
+                    // Coin pickup particles
+                    for (let i = 0; i < 6; i++) {
+                        particles.push({
+                            x: coin.x, y: coin.y,
+                            vx: (Math.random() - 0.5) * 150, vy: (Math.random() - 0.5) * 150,
+                            radius: 3, color: '#facc15', alpha: 1, life: 0.3
+                        });
+                    }
+                }
+            });
+
+            // Power-up Interactions
+            powerups.forEach(p => {
+                if (p.collected) return;
+                const dx = player.x - p.x;
+                const dy = player.y - p.y;
+                if (Math.hypot(dx, dy) < player.radius + 16) {
+                    p.collected = true;
+                    powerupsCollectedInRun++;
+                    playSound('powerup');
+
+                    if (p.type === 'shield') {
+                        player.shieldActive = true;
+                        addFloatingText('SHIELD UP!', p.x, p.y, '#38bdf8');
+                    } else if (p.type === 'magnet') {
+                        player.magnetActive = 8; // 8 seconds
+                        addFloatingText('MAGNET!', p.x, p.y, '#f43f5e');
+                    } else if (p.type === 'doubleJump') {
+                        player.hasDoubleJumpPowerup = true;
+                        addFloatingText('DOUBLE JUMP!', p.x, p.y, '#a855f7');
+                    }
+                }
+            });
+
+            // Obstacle & Spring Interactions
+            obstacles.forEach(obs => {
+                if (obs.type === 'spring') {
+                    if (playerRight > obs.x - obs.width / 2 && playerLeft < obs.x + obs.width / 2) {
+                        if (playerBottom >= obs.y && playerBottom <= obs.y + 15 && player.vy >= 0) {
+                            player.vy = JUMP_FORCE * 1.35; // Massive spring launch
+                            playSound('spring');
+                            camera.shake = 8;
+                            addFloatingText('BOOSTER!', obs.x, obs.y - 20, '#34d399');
+                        }
+                    }
+                } else { // Hurdle or Laser
+                    if (player.x + player.radius > obs.x && player.x - player.radius < obs.x + obs.width) {
+                        if (player.y + player.radius > obs.y && player.y - player.radius < obs.y + obs.height) {
+                            if (player.shieldActive) {
+                                player.shieldActive = false;
+                                obs.x = -9999; // Destroy obstacle
+                                playSound('shieldHit');
+                                camera.shake = 10;
+                                addFloatingText('SHIELD BROKEN!', player.x, player.y - 20, '#f43f5e');
+                            } else {
+                                triggerGameOver();
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Fall into gap check
+            if (player.y > viewportHeight + 100) {
+                triggerGameOver();
+            }
+
+            // Spawn dynamic platform stream
+            while (lastPlatformEndX < player.x + viewportWidth + 600) {
+                spawnNextPlatform();
+            }
+
+            // Cleanup old off-screen elements
+            platforms = platforms.filter(p => p.x + p.width > player.x - 400);
+            coins = coins.filter(c => !c.collected && c.x > player.x - 400);
+            obstacles = obstacles.filter(o => o.x > player.x - 400);
+            powerups = powerups.filter(p => !p.collected && p.x > player.x - 400);
+
+            // Update Particles
+            particles.forEach(p => {
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.alpha -= dt / p.life;
+            });
+            particles = particles.filter(p => p.alpha > 0);
+
+            // Update Floating Text
+            floatingTexts.forEach(ft => {
+                ft.y += ft.vy * dt;
+                ft.alpha -= dt / ft.life;
+            });
+            floatingTexts = floatingTexts.filter(ft => ft.alpha > 0);
+
+            // Move player forward automatically
+            player.x += gameSpeed * dt;
+
+            // Update HUD UI
+            document.getElementById('hudDistance').innerText = `${Math.floor(distance)}m`;
+            document.getElementById('hudCoins').innerText = runCoins;
+            updatePowerupIcons();
+        }
+
+        function updatePowerupIcons() {
+            const container = document.getElementById('powerupIcons');
+            container.innerHTML = '';
+
+            if (player.shieldActive) {
+                container.innerHTML += `<div class="glass-panel px-3 py-1 rounded-xl text-xs font-bold text-cyan-400 flex items-center gap-1">🛡️ Shield</div>`;
+            }
+            if (player.hasDoubleJumpPowerup) {
+                container.innerHTML += `<div class="glass-panel px-3 py-1 rounded-xl text-xs font-bold text-fuchsia-400 flex items-center gap-1">⚡ 2x Jump</div>`;
+            }
+            if (player.magnetActive > 0) {
+                container.innerHTML += `<div class="glass-panel px-3 py-1 rounded-xl text-xs font-bold text-rose-400 flex items-center gap-1">🧲 ${Math.ceil(player.magnetActive)}s</div>`;
+            }
+        }
+
+        // --- RENDER LOOP ---
+        function render() {
+            ctx.clearRect(0, 0, viewportWidth, viewportHeight);
+
+            const biome = getCurrentBiome();
+
+            // 1. Dynamic Background Gradient
+            const bgGrad = ctx.createLinearGradient(0, 0, 0, viewportHeight);
+            bgGrad.addColorStop(0, biome.skyTop);
+            bgGrad.addColorStop(1, biome.skyBottom);
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, viewportWidth, viewportHeight);
+
+            // Camera Transform Matrix
+            ctx.save();
+            const shakeOffsetX = camera.shake > 0 ? (Math.random() - 0.5) * camera.shake : 0;
+            const shakeOffsetY = camera.shake > 0 ? (Math.random() - 0.5) * camera.shake : 0;
+            ctx.translate(-camera.x + shakeOffsetX, shakeOffsetY);
+
+            // 2. Parallax Mountain Layer
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            bgMountains.forEach((m, idx) => {
+                const parallaxX = camera.x * 0.7 + (idx * 160);
+                ctx.beginPath();
+                ctx.moveTo(parallaxX - 100, viewportHeight);
+                ctx.lineTo(parallaxX + m.width / 2, viewportHeight - m.height);
+                ctx.lineTo(parallaxX + m.width + 100, viewportHeight);
+                ctx.closePath();
+                ctx.fill();
+            });
+
+            // 3. Render Platforms
+            platforms.forEach(p => {
+                // Platform Side/Depth
+                ctx.fillStyle = biome.platformSide;
+                ctx.fillRect(p.x, p.y + 8, p.width, p.height);
+
+                // Platform Top Surface
+                ctx.fillStyle = biome.platformTop;
+                ctx.fillRect(p.x, p.y, p.width, 8);
+
+                // Neon Glow Line
+                ctx.shadowColor = biome.platformTop;
+                ctx.shadowBlur = 10;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(p.x, p.y, p.width, 2);
+                ctx.shadowBlur = 0;
+            });
+
+            // 4. Render Obstacles & Springs
+            obstacles.forEach(obs => {
+                if (obs.type === 'spring') {
+                    ctx.fillStyle = '#10b981';
+                    ctx.fillRect(obs.x - obs.width / 2, obs.y, obs.width, obs.height);
+                    ctx.fillStyle = '#34d399';
+                    ctx.fillRect(obs.x - obs.width / 2 + 4, obs.y - 2, obs.width - 8, 4);
+                } else if (obs.type === 'laser') {
+                    ctx.fillStyle = '#ef4444';
+                    ctx.shadowColor = '#f43f5e';
+                    ctx.shadowBlur = 12;
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                    ctx.shadowBlur = 0;
+                } else { // Hurdle
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.fillRect(obs.x + 3, obs.y + 3, obs.width - 6, obs.height - 6);
+                }
+            });
+
+            // 5. Render Coins
+            coins.forEach(c => {
+                if (c.collected) return;
+                ctx.save();
+                ctx.translate(c.x, c.y);
+                ctx.fillStyle = '#facc15';
+                ctx.shadowColor = '#eab308';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(0, 0, 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Inner detail
+                ctx.fillStyle = '#ca8a04';
+                ctx.beginPath();
+                ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // 6. Render Power-ups
+            powerups.forEach(p => {
+                if (p.collected) return;
+                ctx.save();
+                ctx.translate(p.x, p.y);
+
+                let icon = '🛡️';
+                let glowColor = '#38bdf8';
+                if (p.type === 'magnet') { icon = '🧲'; glowColor = '#f43f5e'; }
+                if (p.type === 'doubleJump') { icon = '⚡'; glowColor = '#a855f7'; }
+
+                ctx.shadowColor = glowColor;
+                ctx.shadowBlur = 15;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.beginPath();
+                ctx.arc(0, 0, 16, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                ctx.font = '16px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(icon, 0, 0);
+
+                ctx.restore();
+            });
+
+            // 7. Render Particles
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, p.alpha);
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // 8. Render Player Ball
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.rotation);
+
+            const skin = SKINS[saveData.equippedSkin] || SKINS.classic;
+
+            // Outer Glow
+            ctx.shadowColor = skin.glow;
+            ctx.shadowBlur = 18;
+
+            // Ball Body
+            ctx.fillStyle = skin.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Inner Design Accent
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, player.radius * 0.55, 0, Math.PI * 1.2);
+            ctx.stroke();
+
+            // Shield Aura Rendering
+            if (player.shieldActive) {
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 3;
+                ctx.shadowColor = '#0284c7';
+                ctx.shadowBlur = 12;
+                ctx.beginPath();
+                ctx.arc(0, 0, player.radius + 6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.restore();
+
+            // 9. Floating Texts
+            floatingTexts.forEach(ft => {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, ft.alpha);
+                ctx.fillStyle = ft.color;
+                ctx.font = '900 16px Outfit, sans-serif';
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ctx.restore();
+            });
+
+            ctx.restore(); // Restore Camera Transform
+        }
+
+        // --- GAME LOOP ---
+        function gameLoop(time) {
+            const dt = Math.min(0.05, (time - lastTime) / 1000);
+            lastTime = time;
+
+            update(dt);
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- GAME OVER & ACHIEVEMENTS ---
+        function triggerGameOver() {
+            STATE = 'GAMEOVER';
+            playSound('crash');
+
+            const isNewHigh = distance > saveData.highScore;
+            if (isNewHigh) {
+                saveData.highScore = Math.floor(distance);
+            }
+            saveData.coins += runCoins;
+
+            checkAchievements();
+            saveGame();
+
+            // UI Setup
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('gameOverModal').classList.remove('hidden');
+
+            document.getElementById('finalDistance').innerText = `${Math.floor(distance)}m`;
+            document.getElementById('finalCoins').innerText = runCoins;
+            document.getElementById('finalCombo').innerText = `${maxCombo}x`;
+            document.getElementById('finalBest').innerText = `${saveData.highScore}m`;
+
+            const banner = document.getElementById('newHighBanner');
+            if (isNewHigh) banner.classList.remove('hidden');
+            else banner.classList.add('hidden');
+        }
+
+        function checkAchievements() {
+            const unlock = (id) => {
+                if (!saveData.unlockedAchievements.includes(id)) {
+                    saveData.unlockedAchievements.push(id);
+                }
+            };
+
+            unlock('first_run');
+            if (distance >= 500) unlock('jump_500');
+            if (distance >= 1500) unlock('jump_1500');
+            if (saveData.coins >= 50) unlock('coin_50');
+            if (powerupsCollectedInRun >= 5) unlock('powerup_frenzy');
+            if (saveData.unlockedSkins.length >= 3) unlock('skin_collector');
+        }
+
+        // --- UI & SHOP CONTROLLERS ---
+        function updateMenuUI() {
+            document.getElementById('menuHighScore').innerText = `${saveData.highScore}m`;
+            document.getElementById('menuTotalCoins').innerText = saveData.coins;
+        }
+
+        function openShop() {
+            document.getElementById('shopCoins').innerText = saveData.coins;
+            const container = document.getElementById('shopList');
+            container.innerHTML = '';
+
+            Object.keys(SKINS).forEach(key => {
+                const s = SKINS[key];
+                const isUnlocked = saveData.unlockedSkins.includes(key);
+                const isEquipped = saveData.equippedSkin === key;
+
+                const card = document.createElement('div');
+                card.className = `glass-panel p-3 rounded-2xl flex flex-col items-center justify-between gap-2 border ${isEquipped ? 'border-cyan-400 bg-cyan-500/10' : 'border-white/10'}`;
+
+                card.innerHTML = `
+                    <div class="w-10 h-10 rounded-full my-1" style="background: ${s.color}; box-shadow: 0 0 12px ${s.glow}"></div>
+                    <div class="text-center">
+                        <div class="font-bold text-xs text-white">${s.name}</div>
+                        <div class="text-[10px] text-slate-400">${isUnlocked ? 'Unlocked' : '🪙 ' + s.cost}</div>
+                    </div>
+                `;
+
+                const btn = document.createElement('button');
+                btn.className = 'w-full py-1.5 rounded-xl text-xs font-extrabold transition';
+
+                if (isEquipped) {
+                    btn.className += ' bg-cyan-500 text-slate-950';
+                    btn.innerText = 'EQUIPPED';
+                } else if (isUnlocked) {
+                    btn.className += ' glass-button text-white';
+                    btn.innerText = 'EQUIP';
+                    btn.onclick = () => {
+                        saveData.equippedSkin = key;
+                        saveGame();
+                        openShop();
+                    };
+                } else {
+                    btn.className += ' bg-amber-500 hover:bg-amber-400 text-slate-950';
+                    btn.innerText = 'BUY';
+                    btn.onclick = () => {
+                        if (saveData.coins >= s.cost) {
+                            saveData.coins -= s.cost;
+                            saveData.unlockedSkins.push(key);
+                            saveData.equippedSkin = key;
+                            saveGame();
+                            openShop();
+                        } else {
+                            playSound('crash');
+                        }
+                    };
+                }
+
+                card.appendChild(btn);
+                container.appendChild(card);
+            });
+
+            document.getElementById('shopModal').classList.remove('hidden');
+        }
+
+        function openAchievements() {
+            const container = document.getElementById('achievementsList');
+            container.innerHTML = '';
+
+            ACHIEVEMENTS.forEach(a => {
+                const isUnlocked = saveData.unlockedAchievements.includes(a.id);
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-2xl flex items-center gap-3 border ${isUnlocked ? 'glass-panel border-emerald-500/40' : 'bg-slate-900/40 border-white/5 opacity-50'}`;
+                item.innerHTML = `
+                    <div class="text-2xl">${a.icon}</div>
+                    <div class="flex-1">
+                        <div class="font-extrabold text-sm text-white">${a.title}</div>
+                        <div class="text-xs text-slate-400">${a.desc}</div>
+                    </div>
+                    <div>${isUnlocked ? '✅' : '🔒'}</div>
+                `;
+                container.appendChild(item);
+            });
+
+            document.getElementById('achievementsModal').classList.remove('hidden');
+        }
+
+        function startGame() {
+            initAudio();
+            resetGame();
+            STATE = 'PLAYING';
+
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('gameOverModal').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+        }
+
+        function pauseGame() {
+            if (STATE !== 'PLAYING') return;
+            STATE = 'PAUSED';
+            document.getElementById('pauseModal').classList.remove('hidden');
+        }
+
+        function resumeGame() {
+            STATE = 'PLAYING';
+            document.getElementById('pauseModal').classList.add('hidden');
+        }
+
+        // Event Listeners for UI Buttons
+        document.getElementById('startBtn').onclick = startGame;
+        document.getElementById('retryBtn').onclick = startGame;
+        document.getElementById('pauseBtn').onclick = pauseGame;
+        document.getElementById('resumeBtn').onclick = resumeGame;
+
+        document.getElementById('restartBtn').onclick = () => {
+            document.getElementById('pauseModal').classList.add('hidden');
+            startGame();
+        };
+
+        document.getElementById('quitBtn').onclick = () => {
+            STATE = 'MENU';
+            document.getElementById('pauseModal').classList.add('hidden');
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('mainMenu').classList.remove('hidden');
+            updateMenuUI();
+        };
+
+        document.getElementById('menuFromGameOverBtn').onclick = () => {
+            STATE = 'MENU';
+            document.getElementById('gameOverModal').classList.add('hidden');
+            document.getElementById('mainMenu').classList.remove('hidden');
+            updateMenuUI();
+        };
+
+        document.getElementById('shopBtn').onclick = openShop;
+        document.getElementById('closeShopBtn').onclick = () => {
+            document.getElementById('shopModal').classList.add('hidden');
+            updateMenuUI();
+        };
+
+        document.getElementById('achievementsBtn').onclick = openAchievements;
+        document.getElementById('closeAchievementsBtn').onclick = () => {
+            document.getElementById('achievementsModal').classList.add('hidden');
+        };
+
+        document.getElementById('audioToggleBtn').onclick = () => {
+            audioMuted = !audioMuted;
+            document.getElementById('audioToggleBtn').innerText = audioMuted ? '🔇' : '🔊';
+        };
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            resizeCanvas();
+            loadSaveData();
+            initBackgroundElements();
+            updateMenuUI();
+
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
